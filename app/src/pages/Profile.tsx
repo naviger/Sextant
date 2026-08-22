@@ -8,103 +8,106 @@ export const Profile: React.FC = () => {
 
   if (!isAuthenticated || !user) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <nav className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-blue-600">Sextant</h1>
+      <div className="min-h-screen bg-[linear-gradient(180deg,#eef3f7_0%,#e7edf2_100%)]">
+        <nav className="border-b border-white/70 bg-white/60 backdrop-blur-xl">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+            <img src="/sextant-logo-horiz.svg" alt="Sextant" className="h-8 w-auto" />
             <LoginButton />
           </div>
         </nav>
-        <div className="flex items-center justify-center min-h-screen">
-          <p className="text-gray-600">Please login to view your profile.</p>
+        <div className="flex min-h-[70vh] items-center justify-center px-4">
+          <div className="surface-panel chart-grid rounded-[2rem] p-8 text-center">
+            <p className="section-kicker mb-2">Profile Required</p>
+            <p className="text-lg font-semibold text-slate-900">Please login to view your profile.</p>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-blue-600">Sextant</h1>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(0,166,166,0.08),transparent_28%),linear-gradient(180deg,#eef3f7_0%,#e7edf2_100%)] text-slate-800">
+      <nav className="border-b border-white/70 bg-white/60 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+          <img src="/sextant-logo-horiz.svg" alt="Sextant" className="h-8 w-auto" />
           <LoginButton />
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 h-32"></div>
+      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+        <div className="surface-panel overflow-hidden rounded-[2rem]">
+          <div className="h-32 bg-[linear-gradient(135deg,rgba(14,15,214,0.95),rgba(0,166,166,0.9))]" />
 
-          <div className="px-6 pb-6">
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between -mt-24 mb-6">
+          <div className="px-6 pb-6 lg:px-8">
+            <div className="-mt-24 mb-6 flex flex-col md:flex-row md:items-end md:justify-between">
               <div className="md:flex-1">
                 <div className="flex items-end gap-4">
-                  <div className="w-24 h-24 rounded-full bg-blue-100 border-4 border-white shadow-lg flex items-center justify-center text-4xl">
-                    👤
+                  <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-white bg-white text-4xl shadow-[0_16px_40px_rgba(37,55,70,0.15)]">
+                    <span className="metric-number text-2xl text-[var(--north-atlantic-blue)]">PF</span>
                   </div>
                   <div className="pb-2">
-                    <h1 className="text-3xl font-bold text-gray-900">
+                    <h1 className="text-3xl font-semibold text-slate-900">
                       {user.firstName} {user.lastName}
                     </h1>
-                    <p className="text-gray-600">@{user.username}</p>
+                    <p className="text-slate-600">@{user.username}</p>
                   </div>
                 </div>
               </div>
               <button
                 onClick={() => setIsEditing(!isEditing)}
-                className="mt-4 md:mt-0 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                className="mt-4 rounded-full bg-[linear-gradient(135deg,var(--north-atlantic-blue),#2834ff)] px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 md:mt-0"
               >
                 {isEditing ? 'Cancel' : 'Edit Profile'}
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+            <div className="mt-8 grid grid-cols-1 gap-8 md:grid-cols-2">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Profile Information</h2>
+                <p className="section-kicker mb-3">Profile Information</p>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
                       Email
                     </label>
                     <input
                       type="email"
                       value={user.email}
                       disabled={!isEditing}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-500 focus:outline-none transition-colors disabled:cursor-not-allowed"
+                      className="input-field disabled:cursor-not-allowed disabled:bg-white/60"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
                       Username
                     </label>
                     <input
                       type="text"
                       value={user.username}
                       disabled
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
+                      className="input-field cursor-not-allowed bg-white/60"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="mb-1 block text-sm font-medium text-slate-700">
                         First Name
                       </label>
                       <input
                         type="text"
                         value={user.firstName}
                         disabled={!isEditing}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-500 focus:outline-none transition-colors disabled:cursor-not-allowed"
+                        className="input-field disabled:cursor-not-allowed disabled:bg-white/60"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="mb-1 block text-sm font-medium text-slate-700">
                         Last Name
                       </label>
                       <input
                         type="text"
                         value={user.lastName}
                         disabled={!isEditing}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-500 focus:outline-none transition-colors disabled:cursor-not-allowed"
+                        className="input-field disabled:cursor-not-allowed disabled:bg-white/60"
                       />
                     </div>
                   </div>
@@ -112,12 +115,12 @@ export const Profile: React.FC = () => {
 
                 {isEditing && (
                   <div className="mt-6 flex gap-3">
-                    <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                    <button className="rounded-full bg-[linear-gradient(135deg,var(--north-atlantic-blue),#2834ff)] px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5">
                       Save Changes
                     </button>
                     <button
                       onClick={() => setIsEditing(false)}
-                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                      className="rounded-full border border-slate-300 bg-white/70 px-4 py-2 text-sm font-semibold text-slate-700 transition-all duration-200 hover:bg-white"
                     >
                       Cancel
                     </button>
@@ -126,31 +129,31 @@ export const Profile: React.FC = () => {
               </div>
 
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Assigned Roles</h2>
+                <p className="section-kicker mb-3">Assigned Roles</p>
                 <div className="space-y-2">
                   {user.roles.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {user.roles.map((role) => (
                         <span
                           key={role}
-                          className="px-4 py-2 bg-blue-100 text-blue-800 rounded-full font-medium"
+                          className="rounded-full border border-[rgba(14,15,214,0.15)] bg-[rgba(14,15,214,0.08)] px-4 py-2 text-sm font-semibold text-[var(--north-atlantic-blue)]"
                         >
                           {role}
                         </span>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-gray-500 italic">No roles assigned</p>
+                    <p className="italic text-slate-500">No roles assigned</p>
                   )}
                 </div>
 
                 <div className="mt-8">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Account Security</h3>
+                  <p className="section-kicker mb-3">Account Security</p>
                   <div className="space-y-2">
-                    <button className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+                    <button className="w-full rounded-full border border-slate-300 bg-white/70 px-4 py-2 text-sm font-semibold text-slate-700 transition-all duration-200 hover:bg-white">
                       Change Password
                     </button>
-                    <button className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+                    <button className="w-full rounded-full border border-slate-300 bg-white/70 px-4 py-2 text-sm font-semibold text-slate-700 transition-all duration-200 hover:bg-white">
                       Enable Two-Factor Authentication
                     </button>
                   </div>

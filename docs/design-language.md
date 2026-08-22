@@ -143,10 +143,10 @@ This provides a powerful analogy for strategy.
 
 ### Midnight Ocean
 
-Primary background.
+Primary Foreground - Primary headings and strong separators.
 
 ```css
-#071827
+#4d4d4d
 ```
 
 Characteristics:
@@ -158,12 +158,29 @@ Characteristics:
 
 ---
 
+### New England Fog
+
+Secondary foreground - Secondary headings and nuanced separators.
+
+```css
+#999999
+```
+
+Characteristics:
+
+- Caution
+- Uncertainty
+- Detailed focus
+- Secondary details 
+
+---
+
 ### North Atlantic Blue
 
 Primary action color.
 
 ```css
-#0E4C92
+#0e0fd6
 ```
 
 Characteristics:
@@ -210,17 +227,20 @@ Characteristics:
 
 ## Neutral Palette
 
+### Sea Salt
+
+Primary background color.
+
+```css
+#E7EDF2
+```
+
 ### Fog
 
 ```css
 #F4F7F9
 ```
 
-### Sea Salt
-
-```css
-#E7EDF2
-```
 
 ### Slate
 
@@ -290,6 +310,15 @@ Used for:
 - Reference values
 
 ---
+
+# Logos
+Logos are expressed as SVG's located in the public directory. There is a company logo 
+(Naviger) and a product logo (Sextant). The company logo has a vertical and a horizontal 
+version. The product only has a horizontal layout. The company logo is used only where 
+company branding is explicitly required (splash screens, about screens or elsewhere 
+where Naviger is talked about explicitly). When appearing together, the company logo 
+(either horizontal or veretical) appears over the product logo. The product logo appears 
+in the header and where ever else it is appropriate. 
 
 # Iconography
 

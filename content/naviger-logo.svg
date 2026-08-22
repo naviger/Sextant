@@ -9,7 +9,7 @@
    id="svg1"
    inkscape:version="1.4 (e7c3feb1, 2024-10-09)"
    sodipodi:docname="naviger-logo.svg"
-   inkscape:export-filename="../app/app/app/app/app/app/app/app/app/app/app/app/app/app/app/app/app/app/public/naviger-logo-vert.svg"
+   inkscape:export-filename="../app/public/naviger-logo-vert.svg"
    inkscape:export-xdpi="960.36188"
    inkscape:export-ydpi="960.36188"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -27,9 +27,9 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      inkscape:zoom="0.99199227"
-     inkscape:cx="752.52602"
+     inkscape:cx="752.02199"
      inkscape:cy="539.31872"
-     inkscape:window-width="3440"
+     inkscape:window-width="2576"
      inkscape:window-height="1319"
      inkscape:window-x="1800"
      inkscape:window-y="30"
@@ -43,7 +43,10 @@
      id="layer1">
     <g
        id="g12"
-       transform="translate(9.1598237,17.855859)">
+       transform="translate(9.1598237,17.855859)"
+       inkscape:export-filename="../app/public/naviger-logo-horiz.svg"
+       inkscape:export-xdpi="960.36188"
+       inkscape:export-ydpi="960.36188">
       <path
          id="path11"
          style="font-weight:200;font-size:25.4px;line-height:1.5;font-family:'Hiragino Sans';-inkscape-font-specification:'Hiragino Sans, Ultra-Light';text-align:center;text-anchor:middle;white-space:pre;inline-size:194.115;fill:#999999;stroke:#2d91f5;stroke-width:0"
@@ -76,7 +79,10 @@
     </g>
     <g
        id="g12-5"
-       transform="translate(-5.6584865,-33.312458)">
+       transform="translate(-5.6584865,-33.312458)"
+       inkscape:export-filename="../app/public/naviger-logo-vert.svg"
+       inkscape:export-xdpi="960.36188"
+       inkscape:export-ydpi="960.36188">
       <path
          id="path11-8"
          style="font-weight:200;font-size:25.4px;line-height:1.5;font-family:'Hiragino Sans';-inkscape-font-specification:'Hiragino Sans, Ultra-Light';text-align:center;text-anchor:middle;white-space:pre;inline-size:194.115;fill:#999999;stroke:#2d91f5;stroke-width:0"
@@ -197,5 +203,19 @@
            r="5.1811981" />
       </g>
     </g>
+    <rect
+       style="fill:#0e0fd6;fill-opacity:1;stroke:#2d91f5;stroke-width:0;stroke-dasharray:none"
+       id="rect14"
+       width="6.6679788"
+       height="6.6679788"
+       x="10.935485"
+       y="12.002362" />
+    <rect
+       style="fill:#999999;fill-opacity:1;stroke:#2d91f5;stroke-width:0;stroke-dasharray:none"
+       id="rect14-8"
+       width="6.6679788"
+       height="6.6679788"
+       x="18.318188"
+       y="11.897707" />
   </g>
 </svg>

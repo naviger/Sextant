@@ -6,104 +6,107 @@ export const Home: React.FC = () => {
   const { isAuthenticated, user } = useAuth()
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-blue-600">Sextant</h1>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(0,166,166,0.08),transparent_30%),linear-gradient(180deg,#eef3f7_0%,#e7edf2_100%)] text-slate-800">
+      <nav className="border-b border-white/70 bg-white/60 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-4">
+            <img src="/sextant-logo-horiz.svg" alt="Sextant" className="h-8 w-auto" />
+            <span className="section-kicker hidden sm:inline">Strategic Navigation</span>
+          </div>
           <LoginButton />
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">
-            Welcome to Sextant
-          </h2>
-          <p className="text-xl text-gray-600 mb-8">
-            A modern full-stack application with secure OIDC authentication
-          </p>
-        </div>
+      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+        <section className="surface-panel chart-grid overflow-hidden rounded-[2rem] p-8 lg:p-10">
+          <div className="grid gap-8 lg:grid-cols-[1.4fr_0.9fr] lg:items-end">
+            <div>
+              <p className="section-kicker mb-3">Current Position</p>
+              <h1 className="max-w-3xl text-4xl font-semibold text-slate-900 sm:text-5xl">
+                A calm executive view for aligning strategy, signals, and course corrections.
+              </h1>
+              <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-600">
+                Sextant gives leadership teams a shared North Star, visible drift indicators,
+                and a clearer fix on where the organization stands right now.
+              </p>
+            </div>
 
-        {isAuthenticated && user ? (
-          <div className="bg-white rounded-lg shadow-lg p-8">
-            <h3 className="text-2xl font-bold text-gray-800 mb-6">
-              Hello, {user.firstName || user.username}! 👋
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="p-6 border border-gray-200 rounded-lg">
-                <h4 className="text-lg font-semibold text-gray-700 mb-3">Your Profile</h4>
-                <dl className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <dt className="text-gray-600">Username:</dt>
-                    <dd className="font-medium text-gray-900">{user.username}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-gray-600">Email:</dt>
-                    <dd className="font-medium text-gray-900">{user.email}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-gray-600">Name:</dt>
-                    <dd className="font-medium text-gray-900">
-                      {user.firstName} {user.lastName}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-
-              <div className="p-6 border border-gray-200 rounded-lg">
-                <h4 className="text-lg font-semibold text-gray-700 mb-3">Your Roles</h4>
-                <div className="flex flex-wrap gap-2">
-                  {user.roles.length > 0 ? (
-                    user.roles.map((role) => (
-                      <span
-                        key={role}
-                        className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
-                      >
-                        {role}
-                      </span>
-                    ))
-                  ) : (
-                    <p className="text-gray-500">No roles assigned</p>
-                  )}
+            <div className="surface-panel-dark drift-glow rounded-[1.75rem] p-6 text-white">
+              <p className="text-xs uppercase tracking-[0.2em] text-white/60">Navigation Fix</p>
+              <p className="mt-3 font-semibold text-white/80">North Atlantic Blue / Horizon Teal</p>
+              <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-white/55">Alignment</p>
+                  <p className="metric-number mt-1 text-2xl text-white">86%</p>
+                </div>
+                <div>
+                  <p className="text-white/55">Drift</p>
+                  <p className="metric-number mt-1 text-2xl text-white">3</p>
                 </div>
               </div>
             </div>
           </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-            <p className="text-gray-600 mb-6">
-              Please login to access your profile and other features.
-            </p>
-            <LoginButton />
-          </div>
-        )}
+        </section>
 
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-3xl mb-2">🔐</div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Secure Authentication</h3>
-            <p className="text-gray-600 text-sm">
-              OIDC-based authentication with Keycloak
-            </p>
-          </div>
+        <section className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          {isAuthenticated && user ? (
+            <div className="surface-panel rounded-[2rem] p-7">
+              <p className="section-kicker mb-2">Authenticated Fix</p>
+              <h2 className="text-2xl font-semibold text-slate-900">
+                Welcome back, {user.firstName || user.username}.
+              </h2>
+              <p className="mt-2 text-slate-600">
+                Your current position, roles, and operational bearings are available below.
+              </p>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-3xl mb-2">📊</div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Data Management</h3>
-            <p className="text-gray-600 text-sm">
-              Powered by ArangoDB Enterprise
-            </p>
-          </div>
+              <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                <div className="rounded-3xl border border-slate-200 bg-white/80 p-4">
+                  <p className="section-kicker">Username</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{user.username}</p>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white/80 p-4">
+                  <p className="section-kicker">Email</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{user.email}</p>
+                </div>
+                <div className="rounded-3xl border border-slate-200 bg-white/80 p-4">
+                  <p className="section-kicker">Name</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">
+                    {user.firstName} {user.lastName}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="surface-panel rounded-[2rem] p-7">
+              <p className="section-kicker mb-2">Access Required</p>
+              <h2 className="text-2xl font-semibold text-slate-900">Sign in to view your position fix</h2>
+              <p className="mt-2 max-w-xl text-slate-600">
+                Authentication exposes the profile and strategy surfaces needed for alignment review.
+              </p>
+              <div className="mt-6">
+                <LoginButton />
+              </div>
+            </div>
+          )}
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-3xl mb-2">⚡</div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Fast APIs</h3>
-            <p className="text-gray-600 text-sm">
-              Built with Python FastAPI
-            </p>
-          </div>
-        </div>
+          <aside className="surface-panel rounded-[2rem] p-7">
+            <p className="section-kicker mb-3">Active Signals</p>
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-white/80 p-4">
+                <p className="text-sm font-semibold text-slate-900">Secure Authentication</p>
+                <p className="mt-1 text-sm text-slate-600">OIDC-based access with a clear current bearing.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white/80 p-4">
+                <p className="text-sm font-semibold text-slate-900">Alignment Visibility</p>
+                <p className="mt-1 text-sm text-slate-600">Enterprise and business-unit connections stay visible.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white/80 p-4">
+                <p className="text-sm font-semibold text-slate-900">Strategic Depth</p>
+                <p className="mt-1 text-sm text-slate-600">Confidence and drift indicators surface without clutter.</p>
+              </div>
+            </div>
+          </aside>
+        </section>
       </main>
     </div>
   )

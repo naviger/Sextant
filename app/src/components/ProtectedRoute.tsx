@@ -12,10 +12,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="surface-panel chart-grid w-full max-w-sm rounded-[2rem] p-8 text-center">
+          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-2 border-slate-200 border-t-[var(--north-atlantic-blue)]"></div>
+          <p className="section-kicker mb-2">Position Fix</p>
+          <h1 className="text-2xl font-semibold text-slate-900">Verifying access</h1>
+          <p className="mt-2 text-sm text-slate-600">Locking in your current bearing and loading strategic context.</p>
         </div>
       </div>
     )
@@ -27,10 +29,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
 
   if (requiredRole && user && !user.roles.includes(requiredRole)) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-2">Access Denied</h1>
-          <p className="text-gray-600">You do not have the required permissions to access this page.</p>
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="surface-panel chart-grid w-full max-w-lg rounded-[2rem] p-8 text-center">
+          <p className="section-kicker mb-2">Restricted Signal</p>
+          <h1 className="text-2xl font-semibold text-slate-900">Access denied</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            You do not have the required permissions to access this course.
+          </p>
         </div>
       </div>
     )
