@@ -1,0 +1,206 @@
+services:
+  # Keycloak - Identity Provider
+  keycloak:
+    build:
+      context: ./infra/keycloak
+      dockerfile: Dockerfile
+    container_name: sextant-keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-changeme123}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak123}
+      KC_HOSTNAME: ${KEYCLOAK_HOST:-localhost}
+      KC_HOSTNAME_PORT: 8080
+      KC_PROXY: edge
+      KEYCLOAK_LOGLEVEL: INFO
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sextant-network
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "exec 3<>/dev/tcp/localhost/8080 && printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q '200 OK' <&3 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+      - ./infra/keycloak/realm-config.json:/opt/keycloak/data/import/realm-config.json:ro
+    command: ["start-dev", "--import-realm", "--health-enabled=true", "--metrics-enabled=true"]
+
+  # PostgreSQL Database for Keycloak
+  postgres:
+    image: postgres:16-alpine
+    container_name: sextant-postgres
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak123}
+    ports:
+      - "5432:5432"
+    networks:
+      - sextant-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  # ArangoDB Enterprise Database
+  arangodb:
+    image: arangodb/enterprise:latest
+    container_name: sextant-arangodb
+    environment:
+      ARANGO_ROOT_PASSWORD: ${ARANGODB_ROOT_PASSWORD:-arangodb123}
+    ports:
+      - "8529:8529"
+    networks:
+      - sextant-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "8529"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - arangodb-data:/var/lib/arangodb3
+      - arangodb-apps:/var/lib/arangodb3-apps
+
+  # Python FastAPI Backend
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: sextant-api
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-true}
+      DATABASE_URL: http://arangodb:8529
+      DATABASE_NAME: sextant
+      ARANGODB_USER: root
+      ARANGODB_PASSWORD: ${ARANGODB_ROOT_PASSWORD:-arangodb123}
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sextant}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sextant-api}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
+      API_URL: ${API_URL:-http://localhost:8000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      JWT_ALGORITHM: RS256
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+    ports:
+      - "8000:8000"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      arangodb:
+        condition: service_healthy
+    networks:
+      - sextant-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./api:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # React TypeScript Frontend
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: sextant-app
+    environment:
+      VITE_API_URL: ${API_URL:-http://localhost:8000}
+      VITE_KEYCLOAK_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8080}
+      VITE_KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sextant}
+      VITE_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_FRONTEND_CLIENT_ID:-sextant-app}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - sextant-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./app/src:/app/src
+      - ./app/public:/app/public
+      - /app/node_modules
+    command: npm run dev
+
+  # MailHog - Email Trap for Development
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: sextant-mailhog
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - sextant-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    environment:
+      MH_HOSTNAME: mailhog
+      MH_OUTGOING_ADDR: mailhog:1025
+
+  # Ollama - LLM Support for AI/ML Features
+  ollama:
+    image: ollama/ollama:latest
+    container_name: sextant-ollama
+    ports:
+      - "11434:11434"  # Ollama API
+    networks:
+      - sextant-network
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - ollama-data:/root/.ollama
+    # Uncomment the section below for GPU acceleration (NVIDIA GPUs only)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+networks:
+  sextant-network:
+    driver: bridge
+
+volumes:
+  keycloak-data:
+    driver: local
+  postgres-data:
+    driver: local
+  arangodb-data:
+    driver: local
+  arangodb-apps:
+    driver: local
+  ollama-data:
+    driver: local

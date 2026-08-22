@@ -1,0 +1,83 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.iml
+.project
+.classpath
+.c9/
+*.sublime-workspace
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log
+
+# Dependencies
+node_modules/
+venv/
+env/
+__pycache__/
+*.egg-info/
+dist/
+build/
+
+# Testing
+.coverage/
+.pytest_cache/
+htmlcov/
+
+# Build outputs
+dist/
+build/
+*.out
+*.egg
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+.tmp/
+temp/
+.cache/
+*.tmp
+
+# Git
+.git/
+.gitmodules
+
+# Documentation build
+site/
+_site/
+.jekyll-cache/
+
+# Misc
+*.pem
+*.key
+secrets/
+backup/

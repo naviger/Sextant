@@ -1,0 +1,236 @@
+version: '3.8'
+
+services:
+  # Keycloak - Identity Provider (Production)
+  keycloak:
+    build:
+      context: ./infra/keycloak
+      dockerfile: Dockerfile
+    container_name: sextant-keycloak
+    image: sextant:keycloak-1.0.0
+    restart: unless-stopped
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_HOSTNAME: ${KEYCLOAK_HOST}
+      KC_PROXY: edge
+      KEYCLOAK_LOGLEVEL: WARN
+      KC_HEALTH_ENABLED: 'true'
+      KC_METRICS_ENABLED: 'true'
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sextant-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # PostgreSQL Database for Keycloak (Production)
+  postgres:
+    image: postgres:16-alpine
+    container_name: sextant-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=200"
+    ports:
+      - "5432:5432"
+    networks:
+      - sextant-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # ArangoDB Enterprise Database (Production)
+  arangodb:
+    build:
+      context: ./infra/arangodb
+      dockerfile: Dockerfile
+    container_name: sextant-arangodb
+    restart: unless-stopped
+    image: sextant:arangodb-1.0.0
+    environment:
+      ARANGO_ROOT_PASSWORD: ${ARANGODB_ROOT_PASSWORD}
+    ports:
+      - "8529:8529"
+    networks:
+      - sextant-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8529/_api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - arangodb-data:/var/lib/arangodb3
+      - arangodb-apps:/var/lib/arangodb3-apps
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # Python FastAPI Backend (Production)
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: sextant-api
+    restart: unless-stopped
+    image: sextant:api-1.0.0
+    environment:
+      ENVIRONMENT: production
+      DEBUG: 'false'
+      DATABASE_URL: http://arangodb:8529
+      DATABASE_NAME: sextant_prod
+      ARANGODB_USER: root
+      ARANGODB_PASSWORD: ${ARANGODB_ROOT_PASSWORD}
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      API_URL: ${API_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      JWT_ALGORITHM: RS256
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      LOG_LEVEL: INFO
+      LOG_FORMAT: json
+      WORKERS: 4
+    ports:
+      - "8000:8000"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      arangodb:
+        condition: service_healthy
+    networks:
+      - sextant-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    command: gunicorn app.main:app --bind 0.0.0.0:8000 --workers 4 --worker-class uvicorn.workers.UvicornWorker
+
+  # React TypeScript Frontend (Production)
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile.prod
+    container_name: sextant-app
+    restart: unless-stopped
+    image: sextant:app-1.0.0
+    environment:
+      REACT_APP_API_URL: ${API_URL}
+      REACT_APP_KEYCLOAK_URL: ${KEYCLOAK_URL}
+      REACT_APP_KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      REACT_APP_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - sextant-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Nginx Reverse Proxy (Production)
+  nginx:
+    image: nginx:alpine
+    container_name: sextant-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - app
+      - api
+      - keycloak
+    networks:
+      - sextant-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+networks:
+  sextant-network:
+    driver: bridge
+
+volumes:
+  keycloak-data:
+    driver: local
+  postgres-data:
+    driver: local
+  arangodb-data:
+    driver: local
+  arangodb-apps:
+    driver: local
