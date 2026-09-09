@@ -9,7 +9,7 @@ export const Profile: React.FC = () => {
   if (!isAuthenticated || !user) {
     return (
       <div className="min-h-screen bg-[linear-gradient(180deg,#eef3f7_0%,#e7edf2_100%)]">
-        <nav className="border-b border-white/70 bg-white/60 backdrop-blur-xl">
+        <nav className="relative z-[200] border-b border-white/70 bg-white/60 backdrop-blur-xl">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
             <img src="/sextant-logo-horiz.svg" alt="Sextant" className="h-8 w-auto" />
             <LoginButton />
@@ -27,7 +27,7 @@ export const Profile: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(0,166,166,0.08),transparent_28%),linear-gradient(180deg,#eef3f7_0%,#e7edf2_100%)] text-slate-800">
-      <nav className="border-b border-white/70 bg-white/60 backdrop-blur-xl">
+      <nav className="relative z-[200] border-b border-white/70 bg-white/60 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <img src="/sextant-logo-horiz.svg" alt="Sextant" className="h-8 w-auto" />
           <LoginButton />

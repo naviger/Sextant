@@ -8,9 +8,13 @@ All scripts should be run from the project root directory:
 
 ```bash
 ./scripts/start.sh
+./scripts/start.sh --sync-memorygraph --embed-model nomic-embed-text --require-embeddings
 ./scripts/restart.sh
 ./scripts/stop.sh
 ./scripts/logs.sh [service]
+./scripts/sync_memorygraph.sh
+./scripts/check_memorygraph_health.sh
+./scripts/open_arangodb_ui.sh
 ```
 
 ## Available Scripts
@@ -22,6 +26,7 @@ Starts all Docker containers for the first time or after they've been stopped.
 **Usage:**
 ```bash
 ./scripts/start.sh
+./scripts/start.sh --sync-memorygraph --embed-model nomic-embed-text --require-embeddings
 ```
 
 **What it does:**
@@ -30,6 +35,13 @@ Starts all Docker containers for the first time or after they've been stopped.
 3. Starts all containers via Docker Compose
 4. Waits for services to become healthy
 5. Displays access URLs and default credentials
+
+**Options:**
+- `--sync-memorygraph` ingests docs and refreshes vectors in `memory_documents` and `memory_vectors`
+   and refreshes graph links in `memory_edges`
+- `--embed-model <name>` sets the embedding model used for pull/validation and sync
+- `--auto-pull-embed-model <bool>` controls startup model provisioning (default: true)
+- `--require-embeddings` fails startup if pull or embed validation fails
 
 **Output:**
 ```
@@ -48,6 +60,7 @@ Stops and then starts all services. Useful when you need to reset state or apply
 **Usage:**
 ```bash
 ./scripts/restart.sh
+./scripts/restart.sh --sync-memorygraph
 ```
 
 **What it does:**
@@ -55,6 +68,10 @@ Stops and then starts all services. Useful when you need to reset state or apply
 2. Waits 5 seconds
 3. Starts all containers again
 4. Verifies services are healthy
+
+**Options:**
+- `--sync-memorygraph` ingests docs and refreshes vectors after restart
+   and refreshes graph links in `memory_edges`
 
 **Use cases:**
 - Applying .env changes
@@ -117,6 +134,75 @@ Displays logs from one or all services. Useful for debugging.
 
 ---
 
+### `open_arangodb_ui.sh` - Open Correct ArangoDB Admin UI
+
+Opens the exact ArangoDB Admin UI endpoint for Sextant to avoid port/database confusion when multiple Arango instances are running.
+
+**Usage:**
+```bash
+./scripts/open_arangodb_ui.sh
+./scripts/open_arangodb_ui.sh --sextant
+./scripts/open_arangodb_ui.sh --system
+./scripts/open_arangodb_ui.sh --no-open
+```
+
+**What it does:**
+1. Defaults to Sextant DB UI (`http://127.0.0.1:8529/_db/sextant/_admin/aardvark/index.html`)
+2. Prints expected credentials for the selected instance
+3. Opens the URL in your browser on macOS
+
+**Important:**
+- Sextant ArangoDB is on port `8529`
+- Sextant scripts target Sextant's local services only
+
+---
+
+### `sync_memorygraph.sh` - Sync MemoryGraph Documents + Vectors
+
+Ingests architecture documentation into MemoryGraph and refreshes embeddings.
+
+**Usage:**
+```bash
+./scripts/sync_memorygraph.sh
+./scripts/sync_memorygraph.sh --embed-model nomic-embed-text
+./scripts/sync_memorygraph.sh --no-ollama
+```
+
+**What it does:**
+1. Reads docs from `docs/architecture`, `docs/adr`, `docs/domain`, and `docs/design-language`
+2. Upserts documents into `memory_documents`
+3. Generates embeddings with Ollama when available
+4. Falls back to deterministic vectors when embedding generation is unavailable
+5. Upserts vectors into `memory_vectors`
+6. Builds document relationships in `memory_edges` from markdown links and category grouping
+
+**Options:**
+- `--arango-url`, `--arango-db`, `--arango-user`, `--arango-password`
+- `--ollama-url`, `--embed-model`, `--embed-dim`, `--no-ollama`
+
+---
+
+### `check_memorygraph_health.sh` - Verify Memory Collections
+
+Validates MemoryGraph availability and data readiness for coding agents.
+
+**Usage:**
+```bash
+./scripts/check_memorygraph_health.sh
+./scripts/check_memorygraph_health.sh --require-semantic
+```
+
+**What it checks:**
+1. ArangoDB database connectivity
+2. Non-empty `memory_documents`, `memory_vectors`, and `memory_edges`
+3. Document kind distribution
+4. Embedding source ratio (`ollama` vs `fallback`)
+5. Ollama embedding endpoint probe status
+
+**Options:**
+- `--require-semantic` fails the check when no Ollama-based embeddings are present
+- `--arango-url`, `--arango-db`, `--arango-user`, `--arango-password`, `--ollama-url`
+
 ## Service Health Checks
 
 All scripts automatically verify service health:
@@ -138,6 +224,9 @@ Scripts load configuration from `.env` file. Key variables:
 KEYCLOAK_ADMIN_PASSWORD=changeme123
 ARANGODB_ROOT_PASSWORD=arangodb123
 KEYCLOAK_DB_PASSWORD=keycloak123
+MEMORYGRAPH_EMBED_MODEL=nomic-embed-text
+AUTO_PULL_EMBED_MODEL=true
+REQUIRE_EMBEDDINGS=false
 ```
 
 If `.env` doesn't exist, `start.sh` creates it from `.env.example`.

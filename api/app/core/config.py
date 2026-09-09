@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     
     # Keycloak/OIDC
     KEYCLOAK_URL: str = "http://localhost:8080"
+    KEYCLOAK_PUBLIC_URL: str = "http://localhost:8080"
     KEYCLOAK_REALM: str = "sextant"
     KEYCLOAK_CLIENT_ID: str = "sextant-api"
     KEYCLOAK_CLIENT_SECRET: str = ""

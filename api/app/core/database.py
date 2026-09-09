@@ -1,6 +1,10 @@
 from arango import ArangoClient
 from app.core.config import settings
 from typing import Optional
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class ArangoDB:
@@ -46,9 +50,9 @@ class ArangoDB:
                 password=settings.ARANGODB_PASSWORD,
             )
             
-            print(f"Connected to ArangoDB database: {settings.DATABASE_NAME}")
+            logger.info("Connected to ArangoDB database: %s", settings.DATABASE_NAME)
         except Exception as e:
-            print(f"Failed to connect to ArangoDB: {e}")
+            logger.exception("Failed to connect to ArangoDB: %s", e)
             raise
     
     @property
@@ -70,7 +74,7 @@ class ArangoDB:
         try:
             collection.add_persistent_index(fields)
         except Exception as e:
-            print(f"Index creation info: {e}")
+            logger.info("Index creation info: %s", e)
     
     def close(self):
         """Close database connection."""

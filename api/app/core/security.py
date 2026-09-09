@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-from jose import JWTError, jwt
+from jose import JWTError, jwk, jwt
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -33,14 +33,13 @@ class User(BaseModel):
 
 
 @lru_cache(maxsize=1)
-async def get_jwks():
+def get_jwks():
     """Fetch and cache JWKS from Keycloak."""
     try:
-        async with httpx.AsyncClient() as client:
-            jwks_url = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/certs"
-            response = await client.get(jwks_url)
-            response.raise_for_status()
-            return response.json()
+        jwks_url = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/certs"
+        response = httpx.get(jwks_url, timeout=5.0)
+        response.raise_for_status()
+        return response.json()
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -48,11 +47,45 @@ async def get_jwks():
         )
 
 
+def _get_key_from_jwks(token: str):
+    header = jwt.get_unverified_header(token)
+    kid = header.get("kid")
+    if not kid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token: missing key id",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    jwks = get_jwks()
+    for key in jwks.get("keys", []):
+        if key.get("kid") == kid:
+            return jwk.construct(key)
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid token: signing key not found",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 def decode_token(token: str) -> Dict[str, Any]:
     """Decode and verify JWT token from Keycloak."""
     try:
-        # For development, use HS256. For production with Keycloak, use RS256
-        if settings.DEBUG:
+        header = jwt.get_unverified_header(token)
+        token_algorithm = header.get("alg")
+
+        # Prefer the token's declared algorithm so Keycloak RS256 tokens work in development.
+        if token_algorithm == "RS256" or settings.JWT_ALGORITHM == "RS256":
+            rsa_key = _get_key_from_jwks(token)
+            payload = jwt.decode(
+                token,
+                rsa_key.to_pem().decode("utf-8"),
+                algorithms=["RS256"],
+                options={"verify_aud": False},
+                issuer=f"{settings.KEYCLOAK_PUBLIC_URL}/realms/{settings.KEYCLOAK_REALM}",
+            )
+        elif settings.DEBUG:
             payload = jwt.decode(
                 token,
                 settings.SECRET_KEY,

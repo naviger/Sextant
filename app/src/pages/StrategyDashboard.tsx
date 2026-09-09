@@ -1,13 +1,14 @@
 import React from 'react'
 import { useAuth } from '../context/AuthContext'
 import { LoginButton } from '../components/LoginButton'
+import { MainMenu } from '../components/MainMenu'
 
 export const StrategyDashboard: React.FC = () => {
   const { user } = useAuth()
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(0,166,166,0.08),transparent_28%),linear-gradient(180deg,#eef3f7_0%,#e7edf2_100%)] text-slate-800">
-      <header className="border-b border-white/70 bg-white/60 backdrop-blur-xl">
+      <header className="relative z-[200] border-b border-white/70 bg-white/60 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div>
             <img src="/sextant-logo-horiz.svg" alt="Sextant" className="h-8 w-auto" />
@@ -16,6 +17,8 @@ export const StrategyDashboard: React.FC = () => {
           <LoginButton />
         </div>
       </header>
+
+      <MainMenu breadcrumb="Command Bridge / Dashboard" />
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
         <section className="surface-panel chart-grid rounded-[2rem] p-8 lg:p-10">
