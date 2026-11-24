@@ -1624,6 +1624,125 @@ class TestAdministrationRoutes:
         assert listed_assessments.status_code == 200
         assert len(listed_assessments.json()) == 1
 
+    def test_capability_roadmap_defaults_gap_of_one_when_unassessed(self):
+        fake_db.collection("organizations").insert({"_key": "CORP", "name": "Corporate", "status": "active"})
+
+        created_capability = client.post(
+            "/api/v1/capabilities",
+            json={
+                "name": "Digital Commerce",
+                "category": "Technology",
+                "status": "Active",
+                "owner_organization_id": "CORP",
+                "start_date": "2027-01-01T00:00:00",
+                "end_date": "2027-06-30T00:00:00",
+            },
+        )
+        assert created_capability.status_code == 200
+        capability_id = created_capability.json()["id"]
+
+        roadmap = client.get("/api/v1/capabilities/roadmap")
+        assert roadmap.status_code == 200
+        items = roadmap.json()
+        assert len(items) == 1
+        item = items[0]
+        assert item["capability_id"] == capability_id
+        assert item["current_maturity"] == 1
+        assert item["target_maturity"] == 2
+        assert item["assessment_gap"] == 1
+        assert item["start_date"].startswith("2027-01-01")
+        assert item["end_date"].startswith("2027-06-30")
+        assert item["latest_assessment_id"] is None
+
+    def test_capability_schedule_rejects_reversed_dates_and_supports_clearing(self):
+        fake_db.collection("organizations").insert({"_key": "CORP", "name": "Corporate", "status": "active"})
+        payload = {
+            "name": "Digital Commerce",
+            "owner_organization_id": "CORP",
+            "start_date": "2027-01-01T00:00:00Z",
+            "end_date": "2027-06-30T00:00:00",
+        }
+        collection_url = "/api/v1/capabilities"
+
+        invalid_create = client.post(collection_url, json={**payload, "end_date": "2026-12-31T00:00:00"})
+        assert invalid_create.status_code == 400
+        assert client.get(collection_url).json() == []
+
+        created = client.post(collection_url, json=payload)
+        assert created.status_code == 200
+        capability = created.json()
+        capability_url = f"{collection_url}/{capability['id']}"
+
+        for update in (
+            {"start_date": "2027-07-01T00:00:00Z"},
+            {"end_date": "2026-12-31T00:00:00Z"},
+        ):
+            rejected = client.put(capability_url, json=update)
+            assert rejected.status_code == 400
+            assert client.get(capability_url).json() == capability
+
+        same_day = client.put(capability_url, json={"end_date": payload["start_date"]})
+        assert same_day.status_code == 200
+        assert same_day.json()["end_date"] == same_day.json()["start_date"]
+
+        cleared_start = client.put(capability_url, json={"start_date": None})
+        assert cleared_start.status_code == 200
+        assert cleared_start.json()["start_date"] is None
+        assert cleared_start.json()["end_date"] == same_day.json()["end_date"]
+
+        cleared_end = client.put(capability_url, json={"end_date": None})
+        assert cleared_end.status_code == 200
+        roadmap = client.get(f"{collection_url}/roadmap")
+        assert roadmap.status_code == 200
+        assert roadmap.json()[0]["start_date"] is None
+        assert roadmap.json()[0]["end_date"] is None
+
+    def test_capability_roadmap_uses_latest_assessment_gap(self):
+        fake_db.collection("organizations").insert({"_key": "CORP", "name": "Corporate", "status": "active"})
+
+        created_cycle = client.post(
+            "/api/v1/planning-cycles",
+            json={"name": "FY2039 Planning", "owner_organization_id": "CORP", "status": "Draft"},
+        )
+        assert created_cycle.status_code == 200
+        cycle_id = created_cycle.json()["id"]
+
+        created_capability = client.post(
+            "/api/v1/capabilities",
+            json={
+                "name": "Supplier Management",
+                "category": "Supply Chain",
+                "status": "Active",
+                "owner_organization_id": "CORP",
+                "start_date": "2027-02-01T00:00:00",
+                "end_date": "2027-11-30T00:00:00",
+            },
+        )
+        assert created_capability.status_code == 200
+        capability_id = created_capability.json()["id"]
+
+        created_assessment = client.post(
+            f"/api/v1/capabilities/{capability_id}/assessments",
+            json={
+                "capability_id": capability_id,
+                "planning_cycle_id": cycle_id,
+                "current_maturity": 2,
+                "target_maturity": 5,
+                "owner_organization_id": "CORP",
+            },
+        )
+        assert created_assessment.status_code == 200
+
+        roadmap = client.get("/api/v1/capabilities/roadmap")
+        assert roadmap.status_code == 200
+        items = roadmap.json()
+        assert len(items) == 1
+        item = items[0]
+        assert item["current_maturity"] == 2
+        assert item["target_maturity"] == 5
+        assert item["assessment_gap"] == 3
+        assert item["latest_assessment_id"] == created_assessment.json()["id"]
+
     def test_capability_assessment_rejects_invalid_maturity(self):
         fake_db.collection("organizations").insert({"_key": "CORP", "name": "Corporate", "status": "active"})
 

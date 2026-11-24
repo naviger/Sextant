@@ -717,6 +717,8 @@ class CapabilityCreate(BaseModel):
     category: str = "Other"
     status: str = "Draft"
     owner_organization_id: str
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
 
 
 class CapabilityUpdate(BaseModel):
@@ -726,6 +728,8 @@ class CapabilityUpdate(BaseModel):
     category: Optional[str] = None
     status: Optional[str] = None
     owner_organization_id: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
 
 
 class CapabilityResponse(BaseModel):
@@ -737,6 +741,8 @@ class CapabilityResponse(BaseModel):
     status: str = "Draft"
     owner_organization_id: str
     owner_organization_name: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -806,6 +812,23 @@ class CapabilityDetailResponse(CapabilityResponse):
     linked_choices: List[CapabilityChoiceLinkResponse] = Field(default_factory=list)
     linked_agreements: List[CapabilityAgreementLinkResponse] = Field(default_factory=list)
     assessments: List[CapabilityAssessmentResponse] = Field(default_factory=list)
+
+
+class CapabilityRoadmapItemResponse(BaseModel):
+    """Capability roadmap timeline entry combining schedule and maturity gap."""
+    capability_id: str
+    capability_name: str
+    category: str = "Other"
+    status: str = "Draft"
+    owner_organization_id: str
+    owner_organization_name: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    current_maturity: int
+    target_maturity: int
+    assessment_gap: int
+    latest_assessment_id: Optional[str] = None
+    latest_planning_cycle_id: Optional[str] = None
 
 
 class StrategicChoiceCapabilityLinkCreate(BaseModel):

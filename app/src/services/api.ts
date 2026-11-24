@@ -39,6 +39,7 @@ import {
   CapabilityAssessmentCreate,
   CapabilityCreate,
   CapabilityDetail,
+  CapabilityRoadmapItem,
   StrategicContract,
   StrategicContractCreate,
   StrategicGroup,
@@ -779,6 +780,17 @@ export const getCapabilities = async (search?: string, category?: string, status
   const response = await api.get<Capability[]>('/api/v1/capabilities', {
     params: {
       ...(search ? { search } : {}),
+      ...(category ? { category } : {}),
+      ...(status ? { status } : {}),
+    },
+  })
+  return response.data
+}
+
+export const getCapabilityRoadmap = async (category?: string, status?: string): Promise<CapabilityRoadmapItem[]> => {
+  const api = getApiInstance()
+  const response = await api.get<CapabilityRoadmapItem[]>('/api/v1/capabilities/roadmap', {
+    params: {
       ...(category ? { category } : {}),
       ...(status ? { status } : {}),
     },

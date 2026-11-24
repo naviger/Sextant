@@ -7,6 +7,7 @@ import {
   getCapabilityAssessments,
   getCapabilities,
   getCapabilityDetail,
+  getCapabilityRoadmap,
   getOrganizations,
   getPlanningCycles,
   retireCapability,
@@ -19,11 +20,12 @@ import {
   CapabilityAssessmentCreate,
   CapabilityCreate,
   CapabilityDetail,
+  CapabilityRoadmapItem,
   OrganizationResponse,
   PlanningCycle,
 } from '../types'
 
-type CapabilityView = 'catalog' | 'map' | 'detail'
+type CapabilityView = 'catalog' | 'map' | 'roadmap' | 'detail'
 type CapabilityDetailTab = 'overview' | 'assessments'
 
 const CAPABILITY_CATEGORY_OPTIONS = [
@@ -56,6 +58,8 @@ const EMPTY_CAPABILITY_FORM: CapabilityCreate = {
   category: 'Other',
   status: 'Draft',
   owner_organization_id: '',
+  start_date: '',
+  end_date: '',
 }
 
 const EMPTY_ASSESSMENT_FORM: CapabilityAssessmentCreate = {
@@ -80,6 +84,8 @@ export const Capabilities: React.FC = () => {
   const [detailTab, setDetailTab] = useState<CapabilityDetailTab>('overview')
   const [capabilityForm, setCapabilityForm] = useState<CapabilityCreate>(EMPTY_CAPABILITY_FORM)
   const [activeView, setActiveView] = useState<CapabilityView>('catalog')
+  const [roadmapItems, setRoadmapItems] = useState<CapabilityRoadmapItem[]>([])
+  const [roadmapLoaded, setRoadmapLoaded] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -89,6 +95,12 @@ export const Capabilities: React.FC = () => {
   const refreshCapabilities = async () => {
     const data = await getCapabilities(search || undefined, categoryFilter || undefined, statusFilter || undefined)
     setCapabilities(data)
+  }
+
+  const refreshCapabilityRoadmap = async () => {
+    const data = await getCapabilityRoadmap()
+    setRoadmapItems(data)
+    setRoadmapLoaded(true)
   }
 
   const loadCapabilityDetail = async (capabilityId: string) => {
@@ -145,6 +157,15 @@ export const Capabilities: React.FC = () => {
     void load()
   }, [])
 
+  useEffect(() => {
+    if (activeView !== 'roadmap' || roadmapLoaded) {
+      return
+    }
+    refreshCapabilityRoadmap().catch((loadError) => {
+      setError(loadError instanceof Error ? loadError.message : 'Unable to load capability roadmap')
+    })
+  }, [activeView, roadmapLoaded])
+
   const capabilitiesByCategory = useMemo(() => {
     const grouped: Record<string, Capability[]> = {}
     for (const capability of capabilities) {
@@ -175,6 +196,8 @@ export const Capabilities: React.FC = () => {
       category: capability.category,
       status: capability.status,
       owner_organization_id: capability.owner_organization_id,
+      start_date: capability.start_date ? capability.start_date.slice(0, 10) : '',
+      end_date: capability.end_date ? capability.end_date.slice(0, 10) : '',
     })
     setAssessmentForm({
       ...EMPTY_ASSESSMENT_FORM,
@@ -187,6 +210,13 @@ export const Capabilities: React.FC = () => {
     } catch (detailError) {
       setError(detailError instanceof Error ? detailError.message : 'Unable to load capability detail')
     }
+  }
+
+  const toIsoDate = (value?: string | null): string | null => {
+    if (!value) {
+      return null
+    }
+    return `${value}T00:00:00Z`
   }
 
   const handleSaveCapability = async (event: React.FormEvent) => {
@@ -210,6 +240,8 @@ export const Capabilities: React.FC = () => {
           ...capabilityForm,
           name: capabilityForm.name.trim(),
           description: capabilityForm.description?.trim() || undefined,
+          start_date: toIsoDate(capabilityForm.start_date),
+          end_date: toIsoDate(capabilityForm.end_date),
         })
         setStatusMessage('Capability updated.')
       } else {
@@ -217,6 +249,8 @@ export const Capabilities: React.FC = () => {
           ...capabilityForm,
           name: capabilityForm.name.trim(),
           description: capabilityForm.description?.trim() || undefined,
+          start_date: toIsoDate(capabilityForm.start_date),
+          end_date: toIsoDate(capabilityForm.end_date),
         })
         setSelectedCapabilityId(created.id)
         setStatusMessage('Capability created.')
@@ -225,6 +259,7 @@ export const Capabilities: React.FC = () => {
       if (selectedCapabilityId) {
         await loadCapabilityDetail(selectedCapabilityId)
       }
+      setRoadmapLoaded(false)
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Unable to save capability')
     }
@@ -341,6 +376,56 @@ export const Capabilities: React.FC = () => {
     return MATURITY_LABELS[value] ? `${value} ${MATURITY_LABELS[value]}` : 'Not Assessed'
   }
 
+  const formatRoadmapDate = (value?: string | null): string => {
+    if (!value) {
+      return 'Not scheduled'
+    }
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) {
+      return value
+    }
+    return parsed.toISOString().slice(0, 10)
+  }
+
+  const gapBadgeClass = (gap: number): string => {
+    return gap >= 3 ? 'bg-rose-100 text-rose-700' : gap >= 1 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+  }
+
+  const gapBarClass = (gap: number): string => {
+    return gap >= 3 ? 'bg-rose-400' : gap >= 1 ? 'bg-amber-400' : 'bg-emerald-400'
+  }
+
+  const roadmapTimeline = useMemo(() => {
+    const withDates = roadmapItems.filter((item) => item.start_date || item.end_date)
+    if (withDates.length === 0) {
+      return { rangeStart: 0, rangeEnd: 0, bars: [] as Array<CapabilityRoadmapItem & { offsetPercent: number; widthPercent: number }> }
+    }
+
+    const toTime = (value?: string | null): number | undefined => {
+      if (!value) {
+        return undefined
+      }
+      const parsed = new Date(value).getTime()
+      return Number.isNaN(parsed) ? undefined : parsed
+    }
+
+    const starts = withDates.map((item) => toTime(item.start_date)).filter((value): value is number => value !== undefined)
+    const ends = withDates.map((item) => toTime(item.end_date)).filter((value): value is number => value !== undefined)
+    const rangeStart = Math.min(...starts, ...ends)
+    const rangeEnd = Math.max(...starts, ...ends)
+    const span = Math.max(rangeEnd - rangeStart, 1)
+
+    const bars = withDates.map((item) => {
+      const startTime = toTime(item.start_date) ?? rangeStart
+      const endTime = toTime(item.end_date) ?? startTime
+      const offsetPercent = ((startTime - rangeStart) / span) * 100
+      const widthPercent = Math.max(((endTime - startTime) / span) * 100, 2)
+      return { ...item, offsetPercent, widthPercent }
+    })
+
+    return { rangeStart, rangeEnd, bars }
+  }, [roadmapItems])
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(0,166,166,0.08),transparent_28%),linear-gradient(180deg,#eef3f7_0%,#e7edf2_100%)] text-slate-800">
       <header className="relative z-[200] border-b border-white/70 bg-white/60 backdrop-blur-xl">
@@ -376,6 +461,9 @@ export const Capabilities: React.FC = () => {
             </button>
             <button type="button" className={`button-secondary ${activeView === 'map' ? 'bg-cyan-50 border-cyan-300' : ''}`} onClick={() => setActiveView('map')}>
               Capability Map
+            </button>
+            <button type="button" className={`button-secondary ${activeView === 'roadmap' ? 'bg-cyan-50 border-cyan-300' : ''}`} onClick={() => setActiveView('roadmap')}>
+              Capability Roadmap
             </button>
             <button type="button" className={`button-secondary ${activeView === 'detail' ? 'bg-cyan-50 border-cyan-300' : ''}`} onClick={() => setActiveView('detail')}>
               Capability Detail
@@ -541,6 +629,30 @@ export const Capabilities: React.FC = () => {
                     </select>
                   </div>
 
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="section-kicker mb-2 block" htmlFor="capability-start-date">Start Date</label>
+                      <input
+                        id="capability-start-date"
+                        type="date"
+                        className="input-field"
+                        value={capabilityForm.start_date || ''}
+                        onChange={(event) => setCapabilityForm({ ...capabilityForm, start_date: event.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="section-kicker mb-2 block" htmlFor="capability-end-date">End Date</label>
+                      <input
+                        id="capability-end-date"
+                        type="date"
+                        className="input-field"
+                        value={capabilityForm.end_date || ''}
+                        onChange={(event) => setCapabilityForm({ ...capabilityForm, end_date: event.target.value })}
+                      />
+                    </div>
+                  </div>
+
                   <div className="flex flex-wrap gap-2 pt-1">
                     <button className="button-primary" type="submit">{selectedCapabilityId ? 'Save Capability' : 'Create Capability'}</button>
                     {selectedCapabilityId && (
@@ -631,6 +743,106 @@ export const Capabilities: React.FC = () => {
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          )}
+
+          {activeView === 'roadmap' && (
+            <div className="mt-6 space-y-4">
+              <div className="rounded-xl border border-cyan-100 bg-cyan-50/60 px-4 py-3 text-sm text-cyan-900">
+                {'Each capability spans its planned Start and End Date. Capabilities without an assessment default to a maturity gap of 1.'}
+              </div>
+
+              {roadmapItems.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-600">
+                  {roadmapLoaded ? 'No capabilities found for the roadmap.' : 'Loading capability roadmap...'}
+                </p>
+              ) : (
+                <div className="surface-panel space-y-1 rounded-2xl p-5">
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>{formatRoadmapDate(new Date(roadmapTimeline.rangeStart || Date.now()).toISOString())}</span>
+                    <span>{formatRoadmapDate(new Date(roadmapTimeline.rangeEnd || Date.now()).toISOString())}</span>
+                  </div>
+                  <div className="chart-grid space-y-3 rounded-xl border border-slate-200 bg-white/80 p-4">
+                    {roadmapTimeline.bars.map((bar) => (
+                      <div key={bar.capability_id} className="grid grid-cols-[minmax(160px,220px)_1fr] items-center gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate-text text-sm font-semibold text-slate-900">{bar.capability_name}</p>
+                          <p className="text-xs text-slate-500">{bar.category}</p>
+                        </div>
+                        <div className="relative h-9">
+                          <div
+                            className={`absolute top-1 h-7 rounded-full ${gapBarClass(bar.assessment_gap)} shadow-sm`}
+                            style={{ left: `${bar.offsetPercent}%`, width: `${bar.widthPercent}%` }}
+                            title={`${bar.capability_name}: ${formatRoadmapDate(bar.start_date)} to ${formatRoadmapDate(bar.end_date)} | Gap ${bar.assessment_gap}`}
+                          >
+                            <span className="flex h-full items-center justify-between gap-2 px-3 text-xs font-semibold text-white">
+                              <span className="truncate-text">{formatRoadmapDate(bar.start_date)} to {formatRoadmapDate(bar.end_date)}</span>
+                              <span className="inline-flex shrink-0 rounded-full bg-white/90 px-2 py-0.5 text-slate-800">
+                                Gap {bar.assessment_gap}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {roadmapItems.some((item) => !item.start_date && !item.end_date) && (
+                <div className="rounded-2xl border border-slate-200 bg-white/80 p-4">
+                  <p className="section-kicker">Not Yet Scheduled</p>
+                  <div className="mt-2 space-y-2">
+                    {roadmapItems
+                      .filter((item) => !item.start_date && !item.end_date)
+                      .map((item) => (
+                        <div key={item.capability_id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                          <span>{item.capability_name}</span>
+                          <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${gapBadgeClass(item.assessment_gap)}`}>
+                            Gap {item.assessment_gap}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/80">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold text-slate-700">Capability</th>
+                      <th className="px-4 py-3 font-semibold text-slate-700">Start Date</th>
+                      <th className="px-4 py-3 font-semibold text-slate-700">End Date</th>
+                      <th className="px-4 py-3 font-semibold text-slate-700">Current</th>
+                      <th className="px-4 py-3 font-semibold text-slate-700">Target</th>
+                      <th className="px-4 py-3 font-semibold text-slate-700">Gap</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {roadmapItems.length === 0 ? (
+                      <tr>
+                        <td className="px-4 py-6 text-slate-600" colSpan={6}>No capabilities found.</td>
+                      </tr>
+                    ) : (
+                      roadmapItems.map((item) => (
+                        <tr key={item.capability_id}>
+                          <td className="px-4 py-3 font-semibold text-slate-900">{item.capability_name}</td>
+                          <td className="px-4 py-3 text-slate-700">{formatRoadmapDate(item.start_date)}</td>
+                          <td className="px-4 py-3 text-slate-700">{formatRoadmapDate(item.end_date)}</td>
+                          <td className="px-4 py-3 text-slate-700">{maturityLabel(item.current_maturity)}</td>
+                          <td className="px-4 py-3 text-slate-700">{maturityLabel(item.target_maturity)}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${gapBadgeClass(item.assessment_gap)}`}>
+                              {item.assessment_gap}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
