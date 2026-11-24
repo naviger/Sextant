@@ -39,8 +39,16 @@ Capability fields:
 - Category
 - Status
 - OwnerOrganizationId
+- StartDate
+- EndDate
 - CreatedAt
 - UpdatedAt
+
+StartDate and EndDate define the capability's planned roadmap window and are
+independent of any Planning Cycle or Capability Assessment.
+Both dates are optional. When both are present, EndDate must be on or after
+StartDate. Omit a date from an update to preserve it, or send `null` to clear it.
+The API treats timestamps without an offset as UTC when checking the date order.
 
 CapabilityAssessment fields:
 
@@ -97,6 +105,16 @@ Capability assessments are planning-cycle scoped snapshots.
 Capabilities connect selected direction to execution readiness and reusable operating strength.
 
 Capability Assessment compares current maturity to target maturity and exposes improvement gaps required to support strategy.
+
+## Capability Roadmap
+
+The Capability Roadmap is a graphical, timeline view of all capabilities plotted across their StartDate and EndDate.
+
+Each roadmap item pairs the capability's planned schedule with its maturity gap (TargetMaturity minus CurrentMaturity) drawn from the latest Capability Assessment for that capability, if one exists.
+
+A capability without any Capability Assessment defaults to a maturity gap of one (CurrentMaturity 1, TargetMaturity 2) so it still surfaces on the roadmap as needing attention.
+
+The Capability Roadmap is exposed through `GET /api/v1/capabilities/roadmap` and rendered as a Gantt-style timeline in the Capabilities page, color-coded by gap severity (Low, Medium, High).
 
 ## Traceability
 

@@ -608,6 +608,8 @@ export interface Capability {
   status: 'Draft' | 'Active' | 'Retired' | string
   owner_organization_id: string
   owner_organization_name?: string | null
+  start_date?: string | null
+  end_date?: string | null
   created_at?: string | null
   updated_at?: string | null
 }
@@ -618,6 +620,24 @@ export interface CapabilityCreate {
   category: 'Commercial' | 'Operations' | 'Supply Chain' | 'Technology' | 'People' | 'Finance' | 'Innovation' | 'Risk' | 'Sustainability' | 'Other' | string
   status: 'Draft' | 'Active' | 'Retired' | string
   owner_organization_id: string
+  start_date?: string | null
+  end_date?: string | null
+}
+
+export interface CapabilityRoadmapItem {
+  capability_id: string
+  capability_name: string
+  category: string
+  status: string
+  owner_organization_id: string
+  owner_organization_name?: string | null
+  start_date?: string | null
+  end_date?: string | null
+  current_maturity: number
+  target_maturity: number
+  assessment_gap: number
+  latest_assessment_id?: string | null
+  latest_planning_cycle_id?: string | null
 }
 
 export interface CapabilityChoiceLink {

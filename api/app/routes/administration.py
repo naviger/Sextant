@@ -5,6 +5,7 @@ import io
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import TypeAdapter
 
 from app.core.database import get_db
 from app.core.security import User, get_current_active_user
@@ -75,6 +76,7 @@ from app.schemas import (
     CapabilityAssessmentUpdate,
     CapabilityDetailResponse,
     CapabilityResponse,
+    CapabilityRoadmapItemResponse,
     CapabilityUpdate,
     CapabilityChoiceLinkResponse,
     CapabilityAgreementLinkResponse,
@@ -629,6 +631,8 @@ def _capability_from_doc(
         status=doc.get("status", "Draft"),
         owner_organization_id=doc.get("owner_organization_id"),
         owner_organization_name=owner_organization_name,
+        start_date=doc.get("start_date"),
+        end_date=doc.get("end_date"),
         created_at=doc.get("created_at"),
         updated_at=doc.get("updated_at"),
     )
@@ -1013,6 +1017,20 @@ def _iso_or_none(value: Any) -> Optional[str]:
     if isinstance(value, datetime):
         return value.isoformat()
     return str(value)
+
+
+def _validate_capability_dates(start_date: Optional[datetime], end_date: Optional[datetime]) -> None:
+    if start_date is None or end_date is None:
+        return
+    if start_date.tzinfo is None:
+        start_date = start_date.replace(tzinfo=timezone.utc)
+    if end_date.tzinfo is None:
+        end_date = end_date.replace(tzinfo=timezone.utc)
+    if end_date < start_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Capability end date must be on or after its start date.",
+        )
 
 
 def _default_governance_config() -> GovernanceConfig:
@@ -3505,6 +3523,81 @@ async def list_capabilities(
     ]
 
 
+@router.get("/capabilities/roadmap", response_model=list[CapabilityRoadmapItemResponse])
+async def get_capability_roadmap(
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    db=Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Return the capability roadmap: one timeline entry per capability.
+
+    Each entry pairs the capability's planned start/end window with its
+    latest maturity assessment gap (target maturity minus current maturity).
+    When no assessment exists yet, the capability defaults to a maturity
+    gap of one (current 1, target 2) so it still surfaces on the roadmap.
+    """
+    _user_can_manage_organization(current_user)
+    capabilities = _collection(db, "capabilities")
+    organizations = _collection(db, "organizations")
+    assessments = _collection(db, "capability_assessments")
+
+    capability_items = capabilities.all() if hasattr(capabilities, "all") else []
+    filtered_capabilities = [
+        item
+        for item in capability_items
+        if (not status or item.get("status") == status)
+        and (not category or item.get("category") == category)
+    ]
+
+    assessments_by_capability: dict[str, list[dict[str, Any]]] = {}
+    for assessment in (assessments.all() if hasattr(assessments, "all") else []):
+        capability_id = assessment.get("capability_id")
+        if not capability_id:
+            continue
+        assessments_by_capability.setdefault(capability_id, []).append(assessment)
+
+    roadmap: list[CapabilityRoadmapItemResponse] = []
+    for item in filtered_capabilities:
+        capability_id = item.get("_key") or item.get("id")
+        capability_assessments = sorted(
+            assessments_by_capability.get(capability_id, []),
+            key=lambda entry: entry.get("assessment_date") or "",
+            reverse=True,
+        )
+        latest = capability_assessments[0] if capability_assessments else None
+
+        if latest is not None:
+            current = int(latest.get("current_maturity", 1))
+            target = int(latest.get("target_maturity", 2))
+            gap = max(target - current, 0)
+        else:
+            # Default to a maturity gap of one for capabilities not yet assessed.
+            current = 1
+            target = 2
+            gap = 1
+
+        roadmap.append(
+            CapabilityRoadmapItemResponse(
+                capability_id=capability_id,
+                capability_name=item.get("name"),
+                category=item.get("category", "Other"),
+                status=item.get("status", "Draft"),
+                owner_organization_id=item.get("owner_organization_id"),
+                owner_organization_name=_resolve_owner_name(organizations, item.get("owner_organization_id")),
+                start_date=item.get("start_date"),
+                end_date=item.get("end_date"),
+                current_maturity=current,
+                target_maturity=target,
+                assessment_gap=gap,
+                latest_assessment_id=(latest.get("_key") or latest.get("id")) if latest else None,
+                latest_planning_cycle_id=latest.get("planning_cycle_id") if latest else None,
+            )
+        )
+
+    return sorted(roadmap, key=lambda entry: _iso_or_none(entry.start_date) or "")
+
+
 @router.post("/capabilities", response_model=CapabilityResponse)
 async def create_capability(
     payload: CapabilityCreate,
@@ -3519,6 +3612,7 @@ async def create_capability(
     if not organizations.has(payload.owner_organization_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Owner organization not found")
 
+    _validate_capability_dates(payload.start_date, payload.end_date)
     now = datetime.now(timezone.utc).isoformat()
     key = f"capability-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
     doc = {
@@ -3528,6 +3622,8 @@ async def create_capability(
         "category": _validate_capability_category(payload.category),
         "status": _validate_capability_status(payload.status),
         "owner_organization_id": payload.owner_organization_id,
+        "start_date": _iso_or_none(payload.start_date),
+        "end_date": _iso_or_none(payload.end_date),
         "created_at": now,
         "updated_at": now,
     }
@@ -3582,6 +3678,16 @@ async def update_capability(
         update_data["category"] = _validate_capability_category(update_data["category"])
     if "status" in update_data:
         update_data["status"] = _validate_capability_status(update_data["status"])
+    if {"start_date", "end_date"} & update_data.keys():
+        date_adapter = TypeAdapter(Optional[datetime])
+        _validate_capability_dates(
+            date_adapter.validate_python(update_data.get("start_date", existing.get("start_date"))),
+            date_adapter.validate_python(update_data.get("end_date", existing.get("end_date"))),
+        )
+    if "start_date" in update_data:
+        update_data["start_date"] = _iso_or_none(update_data["start_date"])
+    if "end_date" in update_data:
+        update_data["end_date"] = _iso_or_none(update_data["end_date"])
 
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     capabilities.update({"_key": capability_id, **existing, **update_data})
