@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
 
 
@@ -436,6 +436,19 @@ class StrategicObjectiveResponse(BaseModel):
     target_date: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+class ObjectiveAlignmentUpdate(BaseModel):
+    site_organization_ids: list[str] = Field(max_length=100)
+
+
+class ObjectiveAlignmentResponse(BaseModel):
+    scope: Literal["Corporate", "Site"]
+    organization_id: str
+    objective_id: str
+    objective_title: str
+    corporate_organization_id: str
+    site_organization_ids: list[str]
 
 
 class StrategicChoiceCreate(BaseModel):

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     KEYCLOAK_REALM: str = "sextant"
     KEYCLOAK_CLIENT_ID: str = "sextant-api"
     KEYCLOAK_CLIENT_SECRET: str = ""
+    ALIGNMENT_ORGANIZATION_ASSIGNMENTS: dict[str, str] = {}
     
     # Security
     JWT_ALGORITHM: str = "RS256"

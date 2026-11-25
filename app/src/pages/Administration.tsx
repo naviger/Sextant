@@ -490,6 +490,7 @@ export const Administration: React.FC = () => {
                 onChange={(event) => setOrganizationForm({ ...organizationForm, organization_type: event.target.value })}
               >
                 <option value="Corporate">Corporate</option>
+                <option value="Site">Site</option>
                 <option value="Holding Company">Holding Company</option>
                 <option value="Portfolio Company">Portfolio Company</option>
                 <option value="Division">Division</option>

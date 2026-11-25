@@ -1,7 +1,9 @@
 import pytest
 
+from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.testclient import TestClient
 
+from app.core import security
 from app.core.database import get_db
 from app.core.security import User, get_current_active_user
 from app.main import app
@@ -163,6 +165,89 @@ def create_choice_traceability_chain(owner_organization_id: str, cycle_name: str
 
 
 class TestAdministrationRoutes:
+    async def test_alignment_identity_uses_verified_subject_and_server_assignment(self, monkeypatch):
+        monkeypatch.setattr(security.settings, "ALIGNMENT_ORGANIZATION_ASSIGNMENTS", {"id-a": "site-a"})
+        monkeypatch.setattr(security, "decode_token", lambda _: {
+            "sub": "id-a", "organization_id": "site-b",
+            "realm_access": {"roles": ["site_alignment", "admin"]},
+        })
+        user = await security.get_current_user(HTTPAuthorizationCredentials(scheme="Bearer", credentials="token"))
+        assert user.organization_id == "site-a"
+        assert user.roles == ["site_alignment"]
+
+    def test_organization_hierarchy_preserves_parentage_and_rejects_invalid_moves(self):
+        url = "/api/v1/organizations"
+        levels = ["Corporate", "Division", "Business Unit", "Department", "Team", "Site"]
+        parent = None
+        for index, level in enumerate(levels):
+            key = f"unit-{index}"
+            result = client.post(url, json={
+                "code": key, "name": level, "organization_type": level,
+                "parent_organization_id": parent,
+            })
+            assert result.status_code == 200
+            assert client.get(f"{url}/{key}").json()["parent_organization_id"] == parent
+            assert result.json()["id"] == key
+            assert result.json()["organization_type"] == level
+            parent = key
+
+        assert client.post(url, json={"code": "other", "name": "Other", "organization_type": "Corporate"}).status_code == 200
+        assert client.put(f"{url}/unit-1", json={"parent_organization_id": "unit-4"}).status_code == 409
+        assert client.put(f"{url}/unit-1", json={"parent_organization_id": "other"}).status_code == 409
+        assert client.put(f"{url}/unit-1", json={"parent_organization_id": None}).status_code == 409
+        assert client.post(url, json={"code": "missing", "name": "Missing", "parent_organization_id": "unknown"}).status_code == 404
+        assert client.delete(f"{url}/unit-2").status_code == 409
+        assert client.get(f"{url}/unit-1").json()["parent_organization_id"] == "unit-0"
+
+    def test_pilot_objective_alignment_enforces_corporate_and_site_scope(self, monkeypatch):
+        organizations = fake_db.collection("organizations")
+        for key, kind, parent in (
+            ("corp", "Corporate", None), ("other", "Corporate", None),
+            ("site-a", "Site", "corp"), ("site-b", "Site", "corp"),
+            ("site-c", "Site", "other"), ("site-d", "Site", "corp"),
+        ):
+            organizations.insert({"_key": key, "name": key, "organization_type": kind, "parent_organization_id": parent})
+        cycle, _, objective, _ = create_choice_traceability_chain("corp")
+        url = f"/api/v1/planning-cycles/{cycle}/strategic-objectives/{objective}/alignment"
+
+        def sign_in(role, organization):
+            async def current_user():
+                return User(id="pilot-user", username="pilot", email="pilot@example.com",
+                            roles=[role], organization_id=organization)
+            monkeypatch.setitem(app.dependency_overrides, get_current_active_user, current_user)
+
+        sign_in("corporate_alignment", "corp")
+        assert client.put(url, json={"site_organization_ids": ["site-c"]}).status_code == 400
+        mapped = client.put(url, json={"site_organization_ids": ["site-a", "site-b", "site-a"]})
+        assert mapped.status_code == 200
+        assert mapped.json() == {
+            "scope": "Corporate", "organization_id": "corp", "objective_id": objective,
+            "objective_title": fake_db.collection("strategic_objectives").get(objective)["title"],
+            "corporate_organization_id": "corp", "site_organization_ids": ["site-a", "site-b"],
+        }
+        assert client.get(url).json() == mapped.json()
+        assert client.get(url.replace(f"/{cycle}/", "/wrong-cycle/")).status_code == 404
+
+        sign_in("site_alignment", "site-a")
+        scoped = client.get(url)
+        assert scoped.status_code == 200
+        assert scoped.json()["scope"] == "Site"
+        assert scoped.json()["organization_id"] == "site-a"
+        assert scoped.json()["site_organization_ids"] == ["site-a"]
+        assert client.put(url, json={"site_organization_ids": ["site-b"]}).status_code == 403
+
+        for role, organization in (
+            ("site_alignment", "site-c"), ("site_alignment", "site-d"),
+            ("corporate_alignment", "other"), ("site_alignment", None), ("user", "site-a"),
+        ):
+            sign_in(role, organization)
+            assert client.get(url).status_code in (403, 404)
+
+        sign_in("corporate_alignment", "corp")
+        assert client.put(url, json={"site_organization_ids": []}).json()["site_organization_ids"] == []
+        sign_in("site_alignment", "site-a")
+        assert client.get(url).status_code == 404
+
     def test_get_organizations(self):
         response = client.get("/api/v1/organizations")
         assert response.status_code == 200

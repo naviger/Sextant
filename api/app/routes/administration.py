@@ -12,6 +12,8 @@ from app.core.security import User, get_current_active_user
 from app.schemas import (
     DriverCreate,
     DriverResponse,
+    ObjectiveAlignmentResponse,
+    ObjectiveAlignmentUpdate,
     DriverUpdate,
     PlanningCycleCreate,
     PlanningCycleParticipantCreate,
@@ -1047,6 +1049,58 @@ def _collection(db, name: str):
     return db.collection(name)
 
 
+def _organization_ancestors(organizations, parent_id, *, child_id=None):
+    seen = {child_id}
+    while parent_id:
+        if parent_id in seen:
+            raise HTTPException(status_code=409, detail="Organization hierarchy cannot contain a cycle")
+        if not organizations.has(parent_id):
+            raise HTTPException(status_code=404, detail="Parent organization not found")
+        seen.add(parent_id)
+        parent = organizations.get(parent_id)
+        yield parent_id, parent
+        parent_id = parent.get("parent_organization_id")
+
+
+def _validate_organization_parent(organizations, key, document, existing=None):
+    parent_id = document.get("parent_organization_id")
+    organization_type = document.get("organization_type")
+    ancestry = list(_organization_ancestors(organizations, parent_id, child_id=key))
+    corporate_id = next((ancestor_id for ancestor_id, ancestor in ancestry
+                         if ancestor.get("organization_type") == "Corporate"), None)
+    if parent_id and organization_type == "Corporate":
+        raise HTTPException(status_code=400, detail="A Corporate organization must be top-level")
+    if organization_type == "Site" and not corporate_id:
+        raise HTTPException(status_code=400, detail="A Site must belong to a Corporate hierarchy")
+    if existing is None:
+        return
+    if existing.get("organization_type") == "Corporate" and organization_type != "Corporate":
+        raise HTTPException(status_code=409, detail="A Corporate scope cannot change organization type")
+    if existing.get("parent_organization_id") != parent_id:
+        current_scope = next((ancestor_id for ancestor_id, ancestor in _organization_ancestors(
+            organizations, existing.get("parent_organization_id"), child_id=key
+        ) if ancestor.get("organization_type") == "Corporate"), None)
+        if current_scope and current_scope != corporate_id:
+            raise HTTPException(status_code=409, detail="Organizations cannot move outside their Corporate hierarchy")
+
+
+def _organization_writer(db=Depends(get_db), current_user: User = Depends(get_current_active_user)):
+    _user_can_manage_organization(current_user)
+    organizations = _collection(db, "organizations")
+    if not hasattr(db, "begin_transaction"):
+        yield organizations
+        return
+    # Checking and writing under one lock prevents two concurrent moves from creating a cycle.
+    transaction = db.begin_transaction(exclusive="organizations")
+    try:
+        yield transaction.collection("organizations")
+    except BaseException:
+        transaction.abort_transaction()
+        raise
+    else:
+        transaction.commit_transaction()
+
+
 @router.get("/organizations", response_model=list[OrganizationResponse])
 async def list_organizations(
     status: Optional[str] = None,
@@ -1074,12 +1128,9 @@ async def list_organizations(
 @router.post("/organizations", response_model=OrganizationResponse)
 async def create_organization(
     payload: OrganizationCreate,
-    db=Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    organizations=Depends(_organization_writer),
 ):
     """Create a new organization unit."""
-    _user_can_manage_organization(current_user)
-    organizations = _collection(db, "organizations")
     now = datetime.now(timezone.utc).isoformat()
     org_key = payload.code or f"org-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
     if organizations.has(org_key):
@@ -1106,6 +1157,7 @@ async def create_organization(
         "created_at": now,
         "updated_at": now,
     }
+    _validate_organization_parent(organizations, org_key, doc)
     organizations.insert(doc)
     return _organization_from_doc(doc)
 
@@ -1113,12 +1165,9 @@ async def create_organization(
 @router.post("/organizations/import", response_model=OrganizationImportResponse)
 async def import_organizations(
     payload: OrganizationImportRequest,
-    db=Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    organizations=Depends(_organization_writer),
 ):
     """Import organization records from CSV content."""
-    _user_can_manage_organization(current_user)
-    organizations = _collection(db, "organizations")
 
     csv_content = payload.csv_content.strip()
     if not csv_content:
@@ -1165,8 +1214,18 @@ async def import_organizations(
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        if organizations.has(code):
-            existing = organizations.get(code)
+        existing = organizations.get(code) if organizations.has(code) else None
+        if existing is not None:
+            for field in ("parent_organization_id", "organization_type"):
+                if field not in normalized:
+                    document[field] = existing.get(field)
+        try:
+            _validate_organization_parent(organizations, code, document, existing)
+        except HTTPException as error:
+            skipped += 1
+            errors.append(f"Row {row_number}: {error.detail}")
+            continue
+        if existing is not None:
             document["created_at"] = existing.get("created_at", document["created_at"])
             organizations.update({"_key": code, **existing, **document})
             updated += 1
@@ -1176,7 +1235,7 @@ async def import_organizations(
 
         imported_keys.add(code)
 
-    if payload.full_reload:
+    if payload.full_reload and not errors:
         for item in organizations.all() if hasattr(organizations, "all") else []:
             key = item.get("_key") or item.get("code")
             if key and key not in imported_keys:
@@ -1211,19 +1270,19 @@ async def get_organization(
 async def update_organization(
     organization_id: str,
     payload: OrganizationUpdate,
-    db=Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    organizations=Depends(_organization_writer),
 ):
     """Update an organization record."""
-    _user_can_manage_organization(current_user)
-    organizations = _collection(db, "organizations")
     if not organizations.has(organization_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
 
     existing = organizations.get(organization_id)
     update_data = payload.model_dump(exclude_unset=True)
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-    organizations.update({"_key": organization_id, **existing, **update_data})
+    document = {"_key": organization_id, **existing, **update_data}
+    if {"parent_organization_id", "organization_type"} & update_data.keys():
+        _validate_organization_parent(organizations, organization_id, document, existing)
+    organizations.update(document)
     return _organization_from_doc(organizations.get(organization_id))
 
 
@@ -1291,14 +1350,14 @@ async def archive_organization(
 async def delete_organization(
     organization_id: str,
     db=Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    organizations=Depends(_organization_writer),
 ):
     """Delete an organization record."""
-    _user_can_manage_organization(current_user)
-    organizations = _collection(db, "organizations")
     memberships = _collection(db, "strategic_group_memberships")
     if not organizations.has(organization_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    if any(item.get("parent_organization_id") == organization_id for item in organizations.all()):
+        raise HTTPException(status_code=409, detail="Move child organizations before deleting their parent")
 
     existing = organizations.get(organization_id)
     if hasattr(organizations, "delete"):
@@ -2958,6 +3017,91 @@ async def get_strategic_objective(
     )
 
 
+def _active_corporate_scope(organizations, organization_id, organization_type):
+    if not organization_id or not organizations.has(organization_id):
+        return None
+    organization = organizations.get(organization_id)
+    if organization.get("organization_type") != organization_type:
+        return None
+    try:
+        hierarchy = [(organization_id, organization), *_organization_ancestors(
+            organizations, organization.get("parent_organization_id"), child_id=organization_id,
+        )]
+    except HTTPException:
+        return None
+    if any(str(item.get("status", "active")).lower() != "active" for _, item in hierarchy):
+        return None
+    root_id, root = hierarchy[-1]
+    return root_id if root.get("organization_type") == "Corporate" else None
+
+
+def _objective_alignment(db, cycle_id, objective_id, user, site_ids=None):
+    roles = set(user.roles)
+    organizations = _collection(db, "organizations")
+    organization_id = user.organization_id
+    corporate_id = None
+    scope = "Corporate"
+    if "corporate_alignment" in roles:
+        corporate_id = _active_corporate_scope(organizations, organization_id, scope)
+    if not corporate_id and site_ids is None and "site_alignment" in roles:
+        scope = "Site"
+        corporate_id = _active_corporate_scope(organizations, organization_id, scope)
+    if not corporate_id:
+        raise HTTPException(status_code=403, detail="An active alignment role and organization assignment are required")
+
+    objectives = _collection(db, "strategic_objectives")
+    if not objectives.has(objective_id):
+        raise HTTPException(status_code=404, detail="Shared objective not found")
+    objective = objectives.get(objective_id)
+    if (not objective or objective.get("planning_cycle_id") != cycle_id
+            or objective.get("owner_organization_id") != corporate_id):
+        raise HTTPException(status_code=404, detail="Shared objective not found")
+
+    if site_ids is not None:
+        mapped_sites = sorted(set(site_ids))
+        if any(_active_corporate_scope(organizations, site, "Site") != corporate_id for site in mapped_sites):
+            raise HTTPException(status_code=400, detail="Each mapped Site must be active and in the Corporate hierarchy")
+        objectives.update({
+            "_key": objective_id,
+            **({"_rev": objective["_rev"]} if "_rev" in objective else {}),
+            "alignment_site_organization_ids": mapped_sites,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+    else:
+        mapped_sites = objective.get("alignment_site_organization_ids", [])
+        if scope == "Site":
+            if organization_id not in mapped_sites:
+                raise HTTPException(status_code=404, detail="Shared objective not found")
+            mapped_sites = [organization_id]
+        else:
+            mapped_sites = [site for site in mapped_sites
+                            if _active_corporate_scope(organizations, site, "Site") == corporate_id]
+
+    return ObjectiveAlignmentResponse(
+        scope=scope, organization_id=organization_id, objective_id=objective_id,
+        objective_title=objective["title"], corporate_organization_id=corporate_id,
+        site_organization_ids=mapped_sites,
+    )
+
+
+@router.get("/planning-cycles/{cycle_id}/strategic-objectives/{objective_id}/alignment",
+            response_model=ObjectiveAlignmentResponse)
+async def get_objective_alignment(
+    cycle_id: str, objective_id: str, db=Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    return _objective_alignment(db, cycle_id, objective_id, current_user)
+
+
+@router.put("/planning-cycles/{cycle_id}/strategic-objectives/{objective_id}/alignment",
+            response_model=ObjectiveAlignmentResponse)
+async def update_objective_alignment(
+    cycle_id: str, objective_id: str, payload: ObjectiveAlignmentUpdate, db=Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    return _objective_alignment(db, cycle_id, objective_id, current_user, payload.site_organization_ids)
+
+
 @router.put("/planning-cycles/{cycle_id}/strategic-objectives/{objective_id}", response_model=StrategicObjectiveResponse)
 async def update_strategic_objective(
     cycle_id: str,
@@ -2998,6 +3142,10 @@ async def update_strategic_objective(
             )
     if "owner_organization_id" in update_data and not organizations.has(update_data["owner_organization_id"]):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Owner organization not found")
+    if (existing.get("alignment_site_organization_ids")
+            and "owner_organization_id" in update_data
+            and update_data["owner_organization_id"] != existing.get("owner_organization_id")):
+        raise HTTPException(status_code=409, detail="Clear Site alignment before changing the objective owner")
     if "strategic_theme_id" in update_data:
         theme_id = update_data["strategic_theme_id"]
         if theme_id:
