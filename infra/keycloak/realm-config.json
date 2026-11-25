@@ -53,6 +53,14 @@
       {
         "name": "admin",
         "description": "Administrator role"
+      },
+      {
+        "name": "corporate_alignment",
+        "description": "Manage shared objectives within the assigned Corporate scope"
+      },
+      {
+        "name": "site_alignment",
+        "description": "Read shared objectives mapped to the assigned Site"
       }
     ],
     "client": {

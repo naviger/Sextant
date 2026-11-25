@@ -30,6 +30,7 @@ class User(BaseModel):
     last_name: Optional[str] = None
     roles: list[str] = []
     is_active: bool = True
+    organization_id: Optional[str] = None
 
 
 @lru_cache(maxsize=1)
@@ -127,10 +128,15 @@ async def get_current_user(
     last_name: str = payload.get("family_name", "")
     
     # Extract roles from token
-    roles = payload.get("roles", [])
+    roles = set(payload.get("roles", []))
     if "resource_access" in payload and settings.KEYCLOAK_CLIENT_ID in payload["resource_access"]:
         resource_roles = payload["resource_access"][settings.KEYCLOAK_CLIENT_ID].get("roles", [])
-        roles.extend(resource_roles)
+        roles.update(resource_roles)
+    roles.update(
+        {"corporate_alignment", "site_alignment"}.intersection(
+            payload.get("realm_access", {}).get("roles", [])
+        )
+    )
     
     user = User(
         id=payload.get("sub"),
@@ -138,8 +144,9 @@ async def get_current_user(
         email=email,
         first_name=first_name,
         last_name=last_name,
-        roles=list(set(roles)),
-        is_active=True
+        roles=list(roles),
+        is_active=True,
+        organization_id=settings.ALIGNMENT_ORGANIZATION_ASSIGNMENTS.get(payload.get("sub")),
     )
     
     return user
